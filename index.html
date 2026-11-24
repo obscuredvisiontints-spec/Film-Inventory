@@ -50,6 +50,8 @@ button{font:inherit;cursor:pointer}
 .add{width:100%;padding:13px;margin-bottom:12px;font-size:16px}
 .empty{color:var(--mut);text-align:center;padding:30px 10px}
 .done{opacity:.6}
+.gh{font-weight:700;color:var(--mut);font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin:16px 2px 6px}
+.sort{display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:13px;color:var(--mut)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .sheet{background:var(--card);width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:92%;overflow:auto}
 .sheet h2{margin:0 0 10px;font-size:18px}
@@ -85,6 +87,25 @@ function status(r){
   return "ok";
 }
 function needs(r){var s=status(r);return s==="out"||s==="low"}
+function nv(v){v=parseFloat(v);return isFinite(v)?v:1e9}
+function cs(r,k){return String(r[k]==null?"":r[k]).trim()}
+function cp(a,b){return a.localeCompare(b,undefined,{sensitivity:"base"})}
+function groups(list,mode){
+  var f,key;
+  if(mode==="film"){
+    f=function(a,b){return cp(cs(a,"name")||"~",cs(b,"name")||"~")||cp(cs(a,"co")||"~",cs(b,"co")||"~")||nv(a.pc)-nv(b.pc)||nv(a.w)-nv(b.w)};
+    key=function(r){return cs(r,"name")||"No film name"};
+  }else if(mode==="co"){
+    f=function(a,b){return cp(cs(a,"co")||"~",cs(b,"co")||"~")||cp(cs(a,"name")||"~",cs(b,"name")||"~")||nv(a.pc)-nv(b.pc)||nv(a.w)-nv(b.w)};
+    key=function(r){return cs(r,"co")||"No company"};
+  }else{
+    f=function(a,b){return nv(a.w)-nv(b.w)||(a.len||0)-(b.len||0)||nv(a.pc)-nv(b.pc)||cp(cs(a,"name"),cs(b,"name"))};
+    key=function(r){var v=parseFloat(r.w);return isFinite(v)?v+" in":"No width"};
+  }
+  var out=[],last=null;
+  list.slice().sort(f).forEach(function(r){var k=key(r),l=k.toLowerCase();if(l!==last){out.push({h:k,items:[]});last=l}out[out.length-1].items.push(r)});
+  return out;
+}
 function render(){
   var n=S.rolls.filter(needs).length;
   var h="";
@@ -99,15 +120,17 @@ function render(){
   }else{
     m='<button class="b p add" data-a="add">+ Add roll</button>';
     var list2=S.rolls.filter(function(r){return r.sec===tab});
+    var sm=S.sort||"size";
+    m+='<div class="sort"><span>Sort:</span>'+[["size","Size"],["film","Film"],["co","Company"]].map(function(x){return '<button class="b'+(sm===x[0]?" p":"")+'" data-a="sort" data-v="'+x[0]+'" style="padding:6px 10px;font-size:13px">'+x[1]+"</button>"}).join("")+"</div>";
     if(!list2.length)m+='<div class="empty">No rolls in '+SEC[tab]+" yet.</div>";
-    list2.forEach(function(r){m+=card(r,false)});
+    groups(list2,sm).forEach(function(g){m+='<div class="gh">'+esc(g.h)+"</div>";g.items.forEach(function(r){m+=card(r,false)})});
   }
   $("#main").innerHTML=m;
 }
 function card(r,re){
   var s=status(r),pct=Math.max(0,Math.min(100,r.len?r.ft/r.len*100:0));
   var c='<div class="card '+(s==="ok"?"":s)+(re&&r.ord?" done":"")+'" data-id="'+esc(r.id)+'">';
-  c+='<div class="top"><div><span class="nm">'+esc(r.name)+'</span><span class="sec">'+SEC[r.sec]+'</span><div class="w">'+(r.co?esc(r.co)+(r.w?" \u00b7 ":""):"")+(r.w?esc(r.w):"")+"</div></div>";
+  c+='<div class="top"><div><span class="nm">'+esc(r.name)+(r.pc!==""&&r.pc!=null?" "+esc(r.pc)+"%":"")+'</span><span class="sec">'+SEC[r.sec]+'</span><div class="w">'+(r.co?esc(r.co)+(r.w?" \u00b7 ":""):"")+(r.w?esc(r.w):"")+"</div></div>";
   if(!r.out)c+='<button class="b d" data-a="out">&#10005; Out</button>';
   c+="</div>";
   if(s==="out"){
@@ -133,15 +156,15 @@ function card(r,re){
 }
 function form(r,restock){
   var isNew=!r;
-  r=r||{sec:tab==="re"?"auto":tab,name:"",co:"",w:"",full:1,ft:100,len:100};
+  r=r||{sec:tab==="re"?"auto":tab,name:"",co:"",pc:"",w:"",full:1,ft:100,len:100};
   if(restock){r=Object.assign({},r,{full:1,ft:r.len||100})}
   var o="";
   Object.keys(SEC).forEach(function(k){o+='<option value="'+k+'"'+(r.sec===k?" selected":"")+">"+SEC[k]+"</option>"});
   var h='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>'+(restock?"Restock roll":isNew?"Add roll":"Edit roll")+"</h2>";
   h+='<label>Section</label><select id="f-sec">'+o+"</select>";
   h+='<label>Company</label><input id="f-co" value="'+esc(r.co||"")+'" placeholder="e.g. Llumar, 3M, SunTek">';
-  h+='<label>Film type</label><input id="f-name" value="'+esc(r.name)+'" placeholder="e.g. Ceramic 35%">';
-  h+='<label>Width</label><input id="f-w" value="'+esc(r.w)+'" placeholder="e.g. 60 in">';
+  h+='<label>Film line (e.g. Vanquish, Nox, Visio)</label><input id="f-name" value="'+esc(r.name)+'" placeholder="e.g. Ceramic 35%">';
+  h+='<div class="g2"><div><label>Width (in)</label><input id="f-w" value="'+esc(r.w)+'" placeholder="e.g. 60"></div><div><label>Tint %</label><input id="f-pc" type="number" inputmode="decimal" min="0" max="100" value="'+esc(r.pc==null?"":r.pc)+'" placeholder="e.g. 15"></div></div>';
   h+='<div class="g2"><div><label>Full rolls (unopened)</label><input id="f-full" type="number" inputmode="decimal" min="0" value="'+r.full+'"></div>';
   h+='<div><label>Feet on open roll</label><input id="f-ft" type="number" inputmode="decimal" min="0" value="'+r.ft+'"></div></div>';
   h+='<label>Full roll length (ft)</label><input id="f-len" type="number" inputmode="decimal" min="1" value="'+r.len+'">';
@@ -160,6 +183,7 @@ document.addEventListener("click",function(e){
   if(el.classList.contains("ov")&&e.target.closest("[data-stop]"))return;
   var a=el.dataset.a,card=el.closest(".card"),r=card?find(card.dataset.id):null;
   if(a==="tab"){tab=el.dataset.t;render();return}
+  if(a==="sort"){S.sort=el.dataset.v;save();render();return}
   if(a==="add"){form(null);return}
   if(a==="bk"){box("Backup","Copy this text and save it somewhere safe, like Notes or an email to yourself.",JSON.stringify(S),false);return}
   if(a==="rs"){box("Restore","Paste your backup text below. This replaces what is in the app now.","",true);return}
@@ -171,7 +195,7 @@ document.addEventListener("click",function(e){
   if(a==="saveform"){
     var id=el.dataset.id,rs=el.dataset.rs==="1";
     var len=num($("#f-len").value,100)||100;
-    var d={sec:$("#f-sec").value,co:$("#f-co").value.trim(),name:$("#f-name").value.trim()||"Unnamed film",w:$("#f-w").value.trim(),full:Math.floor(num($("#f-full").value,0)),ft:num($("#f-ft").value,0),len:len};
+    var d={sec:$("#f-sec").value,co:$("#f-co").value.trim(),pc:(function(){var v=parseFloat($("#f-pc").value);return isFinite(v)?v:""})(),name:$("#f-name").value.trim()||"Unnamed film",w:$("#f-w").value.trim(),full:Math.floor(num($("#f-full").value,0)),ft:num($("#f-ft").value,0),len:len};
     if(id){var t=find(id);if(t){Object.assign(t,d);if(rs){t.out=false;t.ord=false}else if(t.out&&(d.full>0||d.ft>0)){t.out=false;t.ord=false}}}
     else S.rolls.push(Object.assign({id:"r"+Date.now()+Math.floor(Math.random()*1000),out:false,ord:false},d));
     $("#modal").innerHTML="";save();render();return;
