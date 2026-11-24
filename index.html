@@ -50,6 +50,12 @@ button{font:inherit;cursor:pointer}
 .add{width:100%;padding:13px;margin-bottom:12px;font-size:16px}
 .empty{color:var(--mut);text-align:center;padding:30px 10px}
 .done{opacity:.6}
+.orow{display:grid;grid-template-columns:1fr auto 1fr 70px auto;gap:6px;align-items:center;margin-top:6px}
+.orow input{min-width:0}
+.chip{display:block;min-width:88px;text-align:left;padding:7px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);font-weight:700;font-size:15px}
+.chip .cb{display:block;height:5px;background:var(--bd);border-radius:3px;margin-top:5px;overflow:hidden}
+.chip .cb i{display:block;height:100%;background:var(--ok)}
+.chip.lo .cb i{background:var(--warn)}
 .gh{font-weight:700;color:var(--mut);font-size:13px;letter-spacing:.05em;text-transform:uppercase;margin:16px 2px 6px}
 .sort{display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:13px;color:var(--mut)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -76,14 +82,18 @@ function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&am
 function num(v,d){v=parseFloat(v);return isFinite(v)&&v>=0?v:d}
 try{var j=localStorage.getItem("film-inv");if(j)S=JSON.parse(j)}catch(e){}
 if(!S||!Array.isArray(S.rolls))S={rolls:[]};
+function mig(){S.rolls.forEach(function(r){if(!Array.isArray(r.parts)){r.parts=r.ft>0?[r.ft]:[]}delete r.ft;if(r.full==null)r.full=0;if(!Array.isArray(r.offs))r.offs=[]})}
+function stockFlag(r){if(r.full===0&&r.parts.length===0){r.out=true}else if(r.out){r.out=false;r.ord=false}}
+mig();
 function save(){
   try{localStorage.setItem("film-inv",JSON.stringify(S))}catch(e){}
   clearTimeout(timer);
   timer=setTimeout(function(){if(ref){try{ref.set({json:JSON.stringify(S)}).catch(function(){})}catch(e){}}},400);
 }
+function maxp(r){return (r.parts||[]).reduce(function(m,v){return Math.max(m,v)},0)}
 function status(r){
   if(r.out)return "out";
-  if(r.ft<=10&&r.full===0)return "low";
+  if(r.full===0&&maxp(r)<=10)return "low";
   return "ok";
 }
 function needs(r){var s=status(r);return s==="out"||s==="low"}
@@ -128,7 +138,7 @@ function render(){
   $("#main").innerHTML=m;
 }
 function card(r,re){
-  var s=status(r),pct=Math.max(0,Math.min(100,r.len?r.ft/r.len*100:0));
+  var s=status(r),parts=r.parts||[];
   var c='<div class="card '+(s==="ok"?"":s)+(re&&r.ord?" done":"")+'" data-id="'+esc(r.id)+'">';
   c+='<div class="top"><div><span class="nm">'+esc(r.name)+(r.pc!==""&&r.pc!=null?" "+esc(r.pc)+"%":"")+'</span><span class="sec">'+SEC[r.sec]+'</span><div class="w">'+(r.co?esc(r.co)+(r.w?" \u00b7 ":""):"")+(r.w?esc(r.w):"")+"</div></div>";
   if(!r.out)c+='<button class="b d" data-a="out">&#10005; Out</button>';
@@ -136,10 +146,20 @@ function card(r,re){
   if(s==="out"){
     c+='<div class="msg">All out. Time to order more.</div>';
   }else{
-    c+='<div class="nums"><div><big>'+r.full+'</big><span>full rolls</span></div><div><big>'+r.ft+'</big><span>ft on open roll</span></div></div>';
-    c+='<div class="bar"><i style="width:'+pct+'%"></i></div>';
+    c+='<div class="nums"><div><big>'+r.full+'</big><span>full roll'+(r.full===1?"":"s")+'</span></div><div><big>'+parts.length+'</big><span>partial roll'+(parts.length===1?"":"s")+'</span></div></div>';
+    if(parts.length){
+      c+='<div class="row" style="margin-bottom:10px">';
+      parts.forEach(function(v,i){
+        var pct=Math.max(0,Math.min(100,r.len?v/r.len*100:0));
+        c+='<button class="chip'+(v<=10?" lo":"")+'" data-a="upd" data-i="'+i+'"><span>'+v+' ft</span><span class="cb"><i style="width:'+pct+'%"></i></span></button>';
+      });
+      c+="</div>";
+    }
     if(s==="low")c+='<div class="msg">Low: 10 ft or less. Reorder.</div>';
-    else if(r.ft<=10&&r.full>0)c+='<div class="msg" style="color:var(--warn)">Open roll nearly done. Open next roll.</div>';
+    else if(r.full>0&&parts.length&&maxp(r)<=10)c+='<div class="msg" style="color:var(--warn)">Open roll nearly done. Open next roll.</div>';
+  }
+  if(!re&&(r.offs||[]).length){
+    c+='<div class="w" style="margin:2px 0 6px">Off cuts (W &times; L, in)</div><div class="row" style="margin-bottom:10px">'+r.offs.map(function(o){return '<button class="chip" data-a="offs"><span>'+o.w+' &times; '+o.l+'</span><span class="w">qty '+o.q+'</span></button>'}).join("")+"</div>";
   }
   c+='<div class="row">';
   if(re){
@@ -147,17 +167,21 @@ function card(r,re){
     c+='<button class="b" data-a="restock">Received</button>';
   }else{
     if(!r.out){
-      [5,10,25].forEach(function(v){c+='<button class="b" data-a="adj" data-v="'+v+'">&minus;'+v+" ft</button>"});
+      if(parts.length===1)[5,10,25].forEach(function(v){c+='<button class="b" data-a="adj" data-v="'+v+'">&minus;'+v+" ft</button>"});
       if(r.full>0)c+='<button class="b" data-a="next">Open next roll</button>';
+      c+='<button class="b p" data-a="upd">Update</button>';
+      c+='<button class="b" data-a="weigh">Weigh</button>';
     }else c+='<button class="b p" data-a="restock">Restock</button>';
+    var oc=(r.offs||[]).reduce(function(t,o){return t+o.q},0);
+    c+='<button class="b" data-a="offs">Off cuts'+(oc?" ("+oc+")":"")+'</button>';
     c+='<button class="b" data-a="edit">Edit</button>';
   }
   return c+"</div></div>";
 }
 function form(r,restock){
   var isNew=!r;
-  r=r||{sec:tab==="re"?"auto":tab,name:"",co:"",pc:"",w:"",full:1,ft:100,len:100};
-  if(restock){r=Object.assign({},r,{full:1,ft:r.len||100})}
+  r=r||{sec:tab==="re"?"auto":tab,name:"",co:"Tekton",pc:"",w:"",full:1,parts:[],len:100};
+  if(restock){r=Object.assign({},r,{full:1,parts:[]})}
   var o="";
   Object.keys(SEC).forEach(function(k){o+='<option value="'+k+'"'+(r.sec===k?" selected":"")+">"+SEC[k]+"</option>"});
   var h='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>'+(restock?"Restock roll":isNew?"Add roll":"Edit roll")+"</h2>";
@@ -166,7 +190,7 @@ function form(r,restock){
   h+='<label>Film line (e.g. Vanquish, Nox, Visio)</label><input id="f-name" value="'+esc(r.name)+'" placeholder="e.g. Ceramic 35%">';
   h+='<div class="g2"><div><label>Width (in)</label><input id="f-w" value="'+esc(r.w)+'" placeholder="e.g. 60"></div><div><label>Tint %</label><input id="f-pc" type="number" inputmode="decimal" min="0" max="100" value="'+esc(r.pc==null?"":r.pc)+'" placeholder="e.g. 15"></div></div>';
   h+='<div class="g2"><div><label>Full rolls (unopened)</label><input id="f-full" type="number" inputmode="decimal" min="0" value="'+r.full+'"></div>';
-  h+='<div><label>Feet on open roll</label><input id="f-ft" type="number" inputmode="decimal" min="0" value="'+r.ft+'"></div></div>';
+  h+='<div><label>Partial rolls (ft, comma separated)</label><input id="f-parts" value="'+esc((r.parts||[]).join(", "))+'" placeholder="e.g. 25, 40"></div></div>';
   h+='<label>Full roll length (ft)</label><input id="f-len" type="number" inputmode="decimal" min="1" value="'+r.len+'">';
   h+='<div class="row" style="margin-top:14px"><button class="b p" data-a="saveform" data-id="'+(isNew?"":esc(r.id))+'" data-rs="'+(restock?1:0)+'">Save</button><button class="b" data-a="close">Cancel</button>';
   if(!isNew&&!restock)h+='<button class="b d" data-a="del" data-id="'+esc(r.id)+'" style="margin-left:auto">Delete</button>';
@@ -176,6 +200,51 @@ function form(r,restock){
 function box(t,msg,val,restore){
   $("#modal").innerHTML='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>'+t+'</h2><div class="w">'+msg+'</div><textarea id="bx" rows="8" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)">'+esc(val)+'</textarea><div id="bm" class="msg"></div><div class="row"><button class="b p" data-a="'+(restore?"doRestore":"doCopy")+'">'+(restore?"Restore":"Copy")+'</button><button class="b" data-a="close">Close</button></div></div></div>';
 }
+var UN={g:1,kg:1000,lb:453.592,oz:28.3495},wid=null;
+function unitSel(id,v){return '<select id="'+id+'">'+Object.keys(UN).map(function(k){return '<option value="'+k+'"'+(k===v?" selected":"")+">"+k+"</option>"}).join("")+"</select>"}
+function wfeet(r){
+  var v=parseFloat($("#w-val").value);
+  if(!isFinite(v)||!r.gpf)return null;
+  return (v*UN[$("#w-un").value]-(r.core||0))/r.gpf;
+}
+function weigh(r){
+  wid=r.id;var wu=S.wu||"lb";
+  var f=function(g){return Math.round(g/UN[wu]*1000)/1000};
+  var h='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>Weigh a roll</h2><div class="w">'+esc(r.name)+(r.pc!==""&&r.pc!=null?" "+esc(r.pc)+"%":"")+(r.co?" &middot; "+esc(r.co):"")+(r.w?" &middot; "+esc(r.w):"")+"</div>";
+  if(!r.gpf){
+    h+='<div class="w" style="margin-top:8px">Weight per foot is different for each film and width, so set this one up once. Weigh a roll when you know how many feet are on it (a new full roll works).</div>';
+    h+='<label>Empty core weight</label><div class="g2"><input id="c-core" type="number" inputmode="decimal" min="0" placeholder="core" value="'+(r.core?f(r.core):"")+'"><div>'+unitSel("c-un",wu)+"</div></div>";
+    h+='<label>Roll weight with film on it</label><input id="c-w" type="number" inputmode="decimal" min="0">';
+    h+='<label>Feet on that roll</label><input id="c-len" type="number" inputmode="decimal" min="1" value="'+r.len+'">';
+    h+='<div id="w-msg" class="msg"></div><div class="row"><button class="b p" data-a="wcalsave">Save setup</button><button class="b" data-a="close">Cancel</button></div>';
+  }else{
+    var opts=(r.parts||[]).map(function(v,i){return '<option value="'+i+'">Roll '+(i+1)+" (now "+v+" ft)</option>"}).join("")+'<option value="new">New partial roll</option>';
+    h+='<label>Scale reading (roll with its core)</label><div class="g2"><input id="w-val" type="number" inputmode="decimal" min="0" placeholder="weight"><div>'+unitSel("w-un",wu)+"</div></div>";
+    h+='<div id="w-out" class="msg">Enter the weight</div>';
+    h+='<label>Set it on</label><select id="w-to">'+opts+"</select>";
+    h+='<div class="row" style="margin-top:14px"><button class="b p" data-a="wapply">Apply</button><button class="b" data-a="close">Cancel</button></div>';
+    h+='<div class="w" style="margin-top:12px">Set up at '+f(r.gpf)+" "+wu+" per ft, core "+f(r.core||0)+" "+wu+'. <button class="b" data-a="wrecal" style="padding:4px 8px;font-size:12px">Redo setup</button></div>';
+  }
+  $("#modal").innerHTML=h+"</div></div>";
+  var i=$("#w-val")||$("#c-core");if(i)i.focus();
+}
+var oid=null;
+function orow(o){return '<div class="orow"><input class="o-w" type="number" inputmode="decimal" min="0" placeholder="W" value="'+(o?o.w:"")+'"><span>&times;</span><input class="o-l" type="number" inputmode="decimal" min="0" placeholder="L" value="'+(o?o.l:"")+'"><input class="o-q" type="number" inputmode="numeric" min="1" placeholder="Qty" value="'+(o?o.q:1)+'"><button class="b d" data-a="orem" style="padding:8px 10px">&#10005;</button></div>'}
+function oadd(){var dv=document.createElement("div");dv.innerHTML=orow(null);var n=dv.firstChild;$("#o-rows").appendChild(n);var i=n.querySelector(".o-w");if(i)i.focus()}
+function offsForm(r){
+  oid=r.id;
+  var rows=(r.offs||[]).map(function(o){return orow(o)}).join("");
+  $("#modal").innerHTML='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>Off cuts</h2><div class="w">'+esc(r.name)+(r.pc!==""&&r.pc!=null?" "+esc(r.pc)+"%":"")+(r.w?" &middot; "+esc(r.w):"")+'</div><div class="w" style="margin-top:6px">Width &times; length in inches, then how many you have of that size.</div><div id="o-rows">'+rows+'</div><button class="b" data-a="oadd" style="margin-top:10px">+ Add off cut</button><div class="row" style="margin-top:14px"><button class="b p" data-a="osave">Save</button><button class="b" data-a="close">Cancel</button></div></div></div>';
+  if(!(r.offs||[]).length)oadd();
+}
+function pin(v){return '<input class="u-p" type="number" inputmode="decimal" min="0" value="'+v+'" placeholder="ft left" style="margin-top:6px">'}
+function upd(r,i){
+  var p=(r.parts||[]).map(function(v){return pin(v)}).join("");
+  $("#modal").innerHTML='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>Update stock</h2><div class="w">'+esc(r.name)+(r.pc!==""&&r.pc!=null?" "+esc(r.pc)+"%":"")+'</div><label>Full rolls (unopened)</label><input id="u-full" type="number" inputmode="decimal" min="0" value="'+r.full+'"><label>Partial rolls: feet left on each (0 removes it)</label><div id="u-parts">'+p+'</div><button class="b" data-a="addpart" style="margin-top:8px">+ Add partial roll</button><div class="row" style="margin-top:14px"><button class="b p" data-a="doupd" data-id="'+esc(r.id)+'">Save</button><button class="b" data-a="close">Cancel</button></div></div></div>';
+  var t=(i!=null&&i!=="")?document.querySelectorAll(".u-p")[parseInt(i,10)]:null;
+  if(!t)t=document.querySelector(".u-p")||$("#u-full");
+  t.focus();t.select();
+}
 function find(id){return S.rolls.filter(function(r){return r.id===id})[0]}
 document.addEventListener("click",function(e){
   var el=e.target.closest("[data-a]");
@@ -184,31 +253,44 @@ document.addEventListener("click",function(e){
   var a=el.dataset.a,card=el.closest(".card"),r=card?find(card.dataset.id):null;
   if(a==="tab"){tab=el.dataset.t;render();return}
   if(a==="sort"){S.sort=el.dataset.v;save();render();return}
+  if(a==="doupd"){var t0=find(el.dataset.id);if(t0){t0.full=Math.floor(num($("#u-full").value,0));t0.parts=[].slice.call(document.querySelectorAll(".u-p")).map(function(x){return parseFloat(x.value)}).filter(function(v){return isFinite(v)&&v>0});stockFlag(t0)}$("#modal").innerHTML="";save();render();return}
+  if(a==="addpart"){var dv=document.createElement("div");dv.innerHTML=pin("");var ni=dv.firstChild;$("#u-parts").appendChild(ni);ni.focus();return}
+  if(a==="oadd"){oadd();return}
+  if(a==="orem"){var rowEl=el.closest(".orow");if(rowEl)rowEl.remove();return}
+  if(a==="osave"){var ro=find(oid);if(ro){ro.offs=[].slice.call(document.querySelectorAll(".orow")).map(function(row){return {w:parseFloat(row.querySelector(".o-w").value),l:parseFloat(row.querySelector(".o-l").value),q:Math.max(1,Math.floor(parseFloat(row.querySelector(".o-q").value)||1))}}).filter(function(o){return o.w>0&&o.l>0}).sort(function(a,b){return a.w-b.w||a.l-b.l})}$("#modal").innerHTML="";save();render();return}
+  if(a==="wcalsave"){var rw=find(wid);if(!rw)return;var u=$("#c-un").value,k=UN[u],core=(parseFloat($("#c-core").value)||0)*k,tw=parseFloat($("#c-w").value)*k,ln=parseFloat($("#c-len").value);if(!isFinite(tw)||!(ln>0)||tw<=core){$("#w-msg").textContent="Check the numbers: roll weight has to be more than the core, and feet above 0.";return}rw.core=core;rw.gpf=(tw-core)/ln;S.wu=u;save();weigh(rw);return}
+  if(a==="wapply"){var rw2=find(wid);if(!rw2)return;S.wu=$("#w-un").value;var ft=wfeet(rw2);if(ft==null||ft<=0){$("#w-out").textContent="Enter the weight first, or check the core.";return}ft=Math.round(ft);var to=$("#w-to").value;if(to==="new")rw2.parts.push(ft);else rw2.parts[parseInt(to,10)]=ft;stockFlag(rw2);$("#modal").innerHTML="";save();render();return}
+  if(a==="wrecal"){var rw3=find(wid);if(rw3){rw3.gpf=null;weigh(rw3)}return}
   if(a==="add"){form(null);return}
   if(a==="bk"){box("Backup","Copy this text and save it somewhere safe, like Notes or an email to yourself.",JSON.stringify(S),false);return}
   if(a==="rs"){box("Restore","Paste your backup text below. This replaces what is in the app now.","",true);return}
   if(a==="doCopy"){var bx=$("#bx");bx.select();var ok=false;try{document.execCommand("copy");ok=true}catch(e){}try{navigator.clipboard.writeText(bx.value);ok=true}catch(e){}$("#bm").textContent=ok?"Copied.":"Press and hold the text to copy it.";return}
-  if(a==="doRestore"){try{var d=JSON.parse($("#bx").value);if(d&&Array.isArray(d.rolls)){S=d;save();$("#modal").innerHTML="";render()}else{$("#bm").textContent="That does not look like a backup."}}catch(e){$("#bm").textContent="That does not look like a backup."}return}
+  if(a==="doRestore"){try{var d=JSON.parse($("#bx").value);if(d&&Array.isArray(d.rolls)){S=d;mig();save();$("#modal").innerHTML="";render()}else{$("#bm").textContent="That does not look like a backup."}}catch(e){$("#bm").textContent="That does not look like a backup."}return}
   if(a==="close"){$("#modal").innerHTML="";return}
   if(a==="edit"&&r){form(r);return}
+  if(a==="upd"&&r){upd(r,el.dataset.i);return}
+  if(a==="weigh"&&r){weigh(r);return}
+  if(a==="offs"&&r){offsForm(r);return}
   if(a==="restock"&&r){form(r,true);return}
   if(a==="saveform"){
     var id=el.dataset.id,rs=el.dataset.rs==="1";
     var len=num($("#f-len").value,100)||100;
-    var d={sec:$("#f-sec").value,co:$("#f-co").value.trim(),pc:(function(){var v=parseFloat($("#f-pc").value);return isFinite(v)?v:""})(),name:$("#f-name").value.trim()||"Unnamed film",w:$("#f-w").value.trim(),full:Math.floor(num($("#f-full").value,0)),ft:num($("#f-ft").value,0),len:len};
-    if(id){var t=find(id);if(t){Object.assign(t,d);if(rs){t.out=false;t.ord=false}else if(t.out&&(d.full>0||d.ft>0)){t.out=false;t.ord=false}}}
-    else S.rolls.push(Object.assign({id:"r"+Date.now()+Math.floor(Math.random()*1000),out:false,ord:false},d));
+    var d={sec:$("#f-sec").value,co:$("#f-co").value.trim(),pc:(function(){var v=parseFloat($("#f-pc").value);return isFinite(v)?v:""})(),name:$("#f-name").value.trim()||"Unnamed film",w:$("#f-w").value.trim(),full:Math.floor(num($("#f-full").value,0)),parts:$("#f-parts").value.split(/[\s,]+/).map(parseFloat).filter(function(v){return isFinite(v)&&v>0}),len:len};
+    if(id){var t=find(id);if(t){Object.assign(t,d);if(rs){t.out=false;t.ord=false}stockFlag(t)}}
+    else{var nr=Object.assign({id:"r"+Date.now()+Math.floor(Math.random()*1000),out:false,ord:false},d);stockFlag(nr);S.rolls.push(nr)}
     $("#modal").innerHTML="";save();render();return;
   }
   if(a==="del"){S.rolls=S.rolls.filter(function(x){return x.id!==el.dataset.id});$("#modal").innerHTML="";save();render();return}
   if(!r)return;
-  if(a==="adj"){r.ft=Math.max(0,r.ft-parseInt(el.dataset.v,10));if(r.ft===0&&r.full===0){r.out=true}}
-  else if(a==="next"){if(r.full>0){r.full-=1;r.ft=r.len}}
-  else if(a==="out"){r.out=true;r.full=0;r.ft=0}
+  if(a==="adj"){var p0=r.parts||[];if(p0.length===1){p0[0]=Math.max(0,p0[0]-parseInt(el.dataset.v,10));r.parts=p0.filter(function(v){return v>0});stockFlag(r)}}
+  else if(a==="next"){if(r.full>0){r.full-=1;r.parts.push(r.len)}}
+  else if(a==="out"){r.out=true;r.full=0;r.parts=[]}
   else if(a==="ord"){r.ord=!r.ord}
   save();render();
 });
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){})}
+document.addEventListener("input",function(e){var i=e.target.id;if(i==="w-val"||i==="w-un"){var r=find(wid),o=$("#w-out");if(!r||!o)return;var f=wfeet(r);o.textContent=f==null?"Enter the weight":(f<=0?"Below the core weight. Check the core.":"\u2248 "+Math.round(f)+" ft left")}});
+document.addEventListener("keydown",function(e){var ae=document.activeElement;if(e.key==="Enter"&&ae&&(ae.id==="u-full"||(ae.classList&&ae.classList.contains("u-p")))){var b=document.querySelector("[data-a=doupd]");if(b)b.click()}});
 render();
 </script>
 </body>
