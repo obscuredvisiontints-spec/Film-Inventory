@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Film Inventory</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d1015">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Film Stock">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{color-scheme:light dark;--bg:#f3f4f6;--card:#fff;--tx:#13171d;--mut:#667080;--bd:#dde1e7;--ac:#1f6feb;--acx:#fff;--ok:#1a8f4c;--warn:#8a5a00;--warnbg:#fff1c9;--bad:#c23030;--badbg:#fde7e7;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1015;--card:#171b22;--tx:#eef1f5;--mut:#98a2b3;--bd:#2a303a;--ac:#4c8dff;--acx:#06101f;--ok:#4cc882;--warn:#f5c451;--warnbg:#3a2f0e;--bad:#ff7b7b;--badbg:#3b1717}}
+:root[data-theme="dark"]{--bg:#0d1015;--card:#171b22;--tx:#eef1f5;--mut:#98a2b3;--bd:#2a303a;--ac:#4c8dff;--acx:#06101f;--ok:#4cc882;--warn:#f5c451;--warnbg:#3a2f0e;--bad:#ff7b7b;--badbg:#3b1717}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+header{position:sticky;top:env(safe-area-inset-top,0px);background:var(--bg);z-index:5;padding:12px 14px 8px}
+h1{margin:0 0 8px;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.tabs{display:flex;gap:6px}
+.tabs button{flex:1;padding:9px 4px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;font-size:14px;font-weight:600}
+.tabs button.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:3px;border-radius:9px;background:var(--bad);color:#fff;font-size:12px}
+main{padding:6px 14px 40px;max-width:640px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
+.card.low{border-color:var(--warn);background:var(--warnbg)}
+.card.out{border-color:var(--bad);background:var(--badbg)}
+.card.out .nm{text-decoration:line-through;opacity:.7}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.nm{font-weight:700;font-size:17px}
+.w{color:var(--mut);font-size:14px}
+.sec{display:inline-block;font-size:12px;color:var(--mut);border:1px solid var(--bd);border-radius:6px;padding:0 6px;margin-left:6px}
+.nums{display:flex;gap:18px;margin:10px 0 6px}
+.nums big{font-size:26px;font-weight:700;display:block;line-height:1.1}
+.nums span{color:var(--mut);font-size:13px}
+.bar{height:8px;background:var(--bd);border-radius:4px;overflow:hidden;margin-bottom:10px}
+.bar i{display:block;height:100%;background:var(--ok)}
+.low .bar i{background:var(--warn)}
+.msg{font-weight:700;margin:6px 0 8px}
+.low .msg{color:var(--warn)}.out .msg{color:var(--bad)}
+.row{display:flex;flex-wrap:wrap;gap:6px}
+button{font:inherit;cursor:pointer}
+.b{padding:9px 12px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);font-size:14px;font-weight:600}
+.b.p{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+.b.d{color:var(--bad);border-color:var(--bad)}
+.add{width:100%;padding:13px;margin-bottom:12px;font-size:16px}
+.empty{color:var(--mut);text-align:center;padding:30px 10px}
+.done{opacity:.6}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--card);width:100%;max-width:640px;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:92%;overflow:auto}
+.sheet h2{margin:0 0 10px;font-size:18px}
+label{display:block;font-size:13px;color:var(--mut);margin:8px 0 3px}
+input,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font-size:16px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.note{font-size:12px;color:var(--mut);text-align:center;margin-top:14px}
+</style>
+</head>
+<body>
+<header>
+<h1><span>Film Inventory</span><span><button class="b" data-a="bk" style="padding:6px 10px;font-size:13px">Backup</button> <button class="b" data-a="rs" style="padding:6px 10px;font-size:13px">Restore</button></span></h1>
+<div class="tabs" id="tabs"></div>
+</header>
+<main id="main"></main>
+<div id="modal"></div>
+<script>
+var SEC={auto:"Auto",flat:"Flat Glass",other:"Other"};
+var S={rolls:[]},tab="auto",ref=null,timer=null;
+function $(s){return document.querySelector(s)}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function num(v,d){v=parseFloat(v);return isFinite(v)&&v>=0?v:d}
+try{var j=localStorage.getItem("film-inv");if(j)S=JSON.parse(j)}catch(e){}
+if(!S||!Array.isArray(S.rolls))S={rolls:[]};
+function save(){
+  try{localStorage.setItem("film-inv",JSON.stringify(S))}catch(e){}
+  clearTimeout(timer);
+  timer=setTimeout(function(){if(ref){try{ref.set({json:JSON.stringify(S)}).catch(function(){})}catch(e){}}},400);
+}
+function status(r){
+  if(r.out)return "out";
+  if(r.ft<=10&&r.full===0)return "low";
+  return "ok";
+}
+function needs(r){var s=status(r);return s==="out"||s==="low"}
+function render(){
+  var n=S.rolls.filter(needs).length;
+  var h="";
+  ["auto","flat","other"].forEach(function(k){h+='<button data-a="tab" data-t="'+k+'" class="'+(tab===k?"on":"")+'">'+SEC[k]+"</button>"});
+  h+='<button data-a="tab" data-t="re" class="'+(tab==="re"?"on":"")+'">Reorder'+(n?'<span class="badge">'+n+"</span>":"")+"</button>";
+  $("#tabs").innerHTML=h;
+  var m="";
+  if(tab==="re"){
+    var list=S.rolls.filter(needs);
+    if(!list.length)m='<div class="empty">Nothing to reorder. Stock looks good.</div>';
+    list.forEach(function(r){m+=card(r,true)});
+  }else{
+    m='<button class="b p add" data-a="add">+ Add roll</button>';
+    var list2=S.rolls.filter(function(r){return r.sec===tab});
+    if(!list2.length)m+='<div class="empty">No rolls in '+SEC[tab]+" yet.</div>";
+    list2.forEach(function(r){m+=card(r,false)});
+  }
+  $("#main").innerHTML=m;
+}
+function card(r,re){
+  var s=status(r),pct=Math.max(0,Math.min(100,r.len?r.ft/r.len*100:0));
+  var c='<div class="card '+(s==="ok"?"":s)+(re&&r.ord?" done":"")+'" data-id="'+esc(r.id)+'">';
+  c+='<div class="top"><div><span class="nm">'+esc(r.name)+'</span><span class="sec">'+SEC[r.sec]+'</span><div class="w">'+(r.co?esc(r.co)+(r.w?" \u00b7 ":""):"")+(r.w?esc(r.w):"")+"</div></div>";
+  if(!r.out)c+='<button class="b d" data-a="out">&#10005; Out</button>';
+  c+="</div>";
+  if(s==="out"){
+    c+='<div class="msg">All out. Time to order more.</div>';
+  }else{
+    c+='<div class="nums"><div><big>'+r.full+'</big><span>full rolls</span></div><div><big>'+r.ft+'</big><span>ft on open roll</span></div></div>';
+    c+='<div class="bar"><i style="width:'+pct+'%"></i></div>';
+    if(s==="low")c+='<div class="msg">Low: 10 ft or less. Reorder.</div>';
+    else if(r.ft<=10&&r.full>0)c+='<div class="msg" style="color:var(--warn)">Open roll nearly done. Open next roll.</div>';
+  }
+  c+='<div class="row">';
+  if(re){
+    c+='<button class="b '+(r.ord?"":"p")+'" data-a="ord">'+(r.ord?"Ordered &#10003; (undo)":"Mark ordered")+"</button>";
+    c+='<button class="b" data-a="restock">Received</button>';
+  }else{
+    if(!r.out){
+      [5,10,25].forEach(function(v){c+='<button class="b" data-a="adj" data-v="'+v+'">&minus;'+v+" ft</button>"});
+      if(r.full>0)c+='<button class="b" data-a="next">Open next roll</button>';
+    }else c+='<button class="b p" data-a="restock">Restock</button>';
+    c+='<button class="b" data-a="edit">Edit</button>';
+  }
+  return c+"</div></div>";
+}
+function form(r,restock){
+  var isNew=!r;
+  r=r||{sec:tab==="re"?"auto":tab,name:"",co:"",w:"",full:1,ft:100,len:100};
+  if(restock){r=Object.assign({},r,{full:1,ft:r.len||100})}
+  var o="";
+  Object.keys(SEC).forEach(function(k){o+='<option value="'+k+'"'+(r.sec===k?" selected":"")+">"+SEC[k]+"</option>"});
+  var h='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>'+(restock?"Restock roll":isNew?"Add roll":"Edit roll")+"</h2>";
+  h+='<label>Section</label><select id="f-sec">'+o+"</select>";
+  h+='<label>Company</label><input id="f-co" value="'+esc(r.co||"")+'" placeholder="e.g. Llumar, 3M, SunTek">';
+  h+='<label>Film type</label><input id="f-name" value="'+esc(r.name)+'" placeholder="e.g. Ceramic 35%">';
+  h+='<label>Width</label><input id="f-w" value="'+esc(r.w)+'" placeholder="e.g. 60 in">';
+  h+='<div class="g2"><div><label>Full rolls (unopened)</label><input id="f-full" type="number" inputmode="decimal" min="0" value="'+r.full+'"></div>';
+  h+='<div><label>Feet on open roll</label><input id="f-ft" type="number" inputmode="decimal" min="0" value="'+r.ft+'"></div></div>';
+  h+='<label>Full roll length (ft)</label><input id="f-len" type="number" inputmode="decimal" min="1" value="'+r.len+'">';
+  h+='<div class="row" style="margin-top:14px"><button class="b p" data-a="saveform" data-id="'+(isNew?"":esc(r.id))+'" data-rs="'+(restock?1:0)+'">Save</button><button class="b" data-a="close">Cancel</button>';
+  if(!isNew&&!restock)h+='<button class="b d" data-a="del" data-id="'+esc(r.id)+'" style="margin-left:auto">Delete</button>';
+  h+="</div></div></div>";
+  $("#modal").innerHTML=h;
+}
+function box(t,msg,val,restore){
+  $("#modal").innerHTML='<div class="ov" data-a="close"><div class="sheet" data-stop="1"><h2>'+t+'</h2><div class="w">'+msg+'</div><textarea id="bx" rows="8" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx)">'+esc(val)+'</textarea><div id="bm" class="msg"></div><div class="row"><button class="b p" data-a="'+(restore?"doRestore":"doCopy")+'">'+(restore?"Restore":"Copy")+'</button><button class="b" data-a="close">Close</button></div></div></div>';
+}
+function find(id){return S.rolls.filter(function(r){return r.id===id})[0]}
+document.addEventListener("click",function(e){
+  var el=e.target.closest("[data-a]");
+  if(!el)return;
+  if(el.classList.contains("ov")&&e.target.closest("[data-stop]"))return;
+  var a=el.dataset.a,card=el.closest(".card"),r=card?find(card.dataset.id):null;
+  if(a==="tab"){tab=el.dataset.t;render();return}
+  if(a==="add"){form(null);return}
+  if(a==="bk"){box("Backup","Copy this text and save it somewhere safe, like Notes or an email to yourself.",JSON.stringify(S),false);return}
+  if(a==="rs"){box("Restore","Paste your backup text below. This replaces what is in the app now.","",true);return}
+  if(a==="doCopy"){var bx=$("#bx");bx.select();var ok=false;try{document.execCommand("copy");ok=true}catch(e){}try{navigator.clipboard.writeText(bx.value);ok=true}catch(e){}$("#bm").textContent=ok?"Copied.":"Press and hold the text to copy it.";return}
+  if(a==="doRestore"){try{var d=JSON.parse($("#bx").value);if(d&&Array.isArray(d.rolls)){S=d;save();$("#modal").innerHTML="";render()}else{$("#bm").textContent="That does not look like a backup."}}catch(e){$("#bm").textContent="That does not look like a backup."}return}
+  if(a==="close"){$("#modal").innerHTML="";return}
+  if(a==="edit"&&r){form(r);return}
+  if(a==="restock"&&r){form(r,true);return}
+  if(a==="saveform"){
+    var id=el.dataset.id,rs=el.dataset.rs==="1";
+    var len=num($("#f-len").value,100)||100;
+    var d={sec:$("#f-sec").value,co:$("#f-co").value.trim(),name:$("#f-name").value.trim()||"Unnamed film",w:$("#f-w").value.trim(),full:Math.floor(num($("#f-full").value,0)),ft:num($("#f-ft").value,0),len:len};
+    if(id){var t=find(id);if(t){Object.assign(t,d);if(rs){t.out=false;t.ord=false}else if(t.out&&(d.full>0||d.ft>0)){t.out=false;t.ord=false}}}
+    else S.rolls.push(Object.assign({id:"r"+Date.now()+Math.floor(Math.random()*1000),out:false,ord:false},d));
+    $("#modal").innerHTML="";save();render();return;
+  }
+  if(a==="del"){S.rolls=S.rolls.filter(function(x){return x.id!==el.dataset.id});$("#modal").innerHTML="";save();render();return}
+  if(!r)return;
+  if(a==="adj"){r.ft=Math.max(0,r.ft-parseInt(el.dataset.v,10));if(r.ft===0&&r.full===0){r.out=true}}
+  else if(a==="next"){if(r.full>0){r.full-=1;r.ft=r.len}}
+  else if(a==="out"){r.out=true;r.full=0;r.ft=0}
+  else if(a==="ord"){r.ord=!r.ord}
+  save();render();
+});
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){})}
+render();
+</script>
+</body>
+</html>
